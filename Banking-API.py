@@ -1,9 +1,10 @@
 import sqlite3
+
 from random import randint
 
-from flask import Flask, request, jsonify  # added to top of file
+from flask import Flask, request, jsonify
 
-from flask_cors import CORS  # added to top of file
+from flask_cors import CORS
 
 import main
 
@@ -48,7 +49,27 @@ def get_user_by_id(user_id):
     return user
 
 
-# the authentication part
+def authentication(account_id, pin_code):
+    conn = sqlite3.connect('bank.db')
+
+    conn.row_factory = sqlite3.Row
+
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM Users WHERE Account_ID = ? AND Password = ?", (account_id, pin_code))
+
+    row = cur.fetchone()
+
+    if row != None:
+
+        return 1
+
+    else:
+
+        return 0
+
+
+# the money deposit part
 
 def money_deposit(user):
     updated_user = {}
@@ -138,6 +159,84 @@ def random_Account(n):
     return randint(range_start, range_end)
 
 
+def money_withdrawProcess(account_id, amount):
+
+    conn = sqlite3.connect('bank.db')
+
+    conn.row_factory = sqlite3.Row
+
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM Users WHERE Account_ID = ?", (account_id,))
+
+    row = cur.fetchone()
+
+    money = int(row["Money_Amount"])
+
+    if money > int(amount) + 1000:
+
+        balance = money - int(amount) + 1000
+
+    else:
+
+        balance = 0
+
+    return balance
+
+
+def money_withdraw(user):
+    updated_user = {}
+
+    user_id = user["user_id"]
+
+    password = user["password"]
+
+    amount = user["money"]
+
+    authentication_account = authentication(user_id, password)
+
+    try:
+        if(authentication_account == 1):
+
+            get_balance = money_withdrawProcess(user_id, amount)
+
+            if(get_balance == 0):
+
+                return "Insufficient Account Balance For Withdraw Money"
+
+            else:
+                try:
+                    conn = connect_to_db()
+
+                    cur = conn.cursor()
+
+                    cur.execute("UPDATE Users SET Money_Amount = ? WHERE Account_ID = ?", (get_balance, user_id))
+
+                    conn.commit()
+
+                    updated_user = get_user_by_id(user["user_id"])
+
+                except:
+                    conn.rollback()
+
+                    updated_user = {}
+
+                    return "Application Logical Error"
+
+                finally:
+                    conn.close()
+
+                return updated_user
+        else:
+
+            return "User Can't Be Authenticated, Try Again"
+    except:
+
+        return "Logical Error"
+
+
+
+
 app = Flask(__name__)
 
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -163,6 +262,12 @@ def api_add_user():
 def api_update_user():
     user = request.get_json()
     return jsonify(money_deposit(user))
+
+
+@app.route('/api/users/withdraw', methods=['PUT'])
+def api_update_withdraw():
+    user = request.get_json()
+    return jsonify(money_withdraw(user))
 
 
 if __name__ == "__main__":
