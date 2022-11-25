@@ -48,6 +48,56 @@ def get_user_by_id(user_id):
     return user
 
 
+# the authentication part
+
+def money_deposit(user):
+    updated_user = {}
+    try:
+        conn = connect_to_db()
+
+        cur = conn.cursor()
+
+        balance = money_process(user["account_number"], user["amount"])
+
+        cur.execute("UPDATE Users SET Money_Amount = ? WHERE Account_ID = ?", (balance, user["account_number"]))
+
+        conn.commit()
+
+        updated_user = get_user_by_id(user["account_number"])
+
+    except:
+
+        conn.rollback()
+
+        updated_user = {}
+
+        return 0
+
+    finally:
+        conn.close()
+
+    return updated_user
+
+
+# that function can process money
+
+def money_process(account_id, amount):
+
+    conn = sqlite3.connect('bank.db')
+
+    conn.row_factory = sqlite3.Row
+
+    cur = conn.cursor()
+
+    cur.execute("SELECT * FROM Users WHERE Account_ID = ?", (account_id,))
+
+    row = cur.fetchone()
+
+    money = int(row["Money_Amount"]) + int(amount)
+
+    return str(money)
+
+
 # that function can create user accounts when pass username, password and email
 
 def create_account(user):
@@ -75,7 +125,7 @@ def create_account(user):
     finally:
         conn.close()
 
-    return inserted_user
+    return Account_Number
 
 
 # Function for generate random account numbers
@@ -107,6 +157,12 @@ def api_get_user(user_id):
 def api_add_user():
     user = request.get_json()
     return jsonify(create_account(user))
+
+
+@app.route('/api/users/update', methods=['PUT'])
+def api_update_user():
+    user = request.get_json()
+    return jsonify(money_deposit(user))
 
 
 if __name__ == "__main__":
